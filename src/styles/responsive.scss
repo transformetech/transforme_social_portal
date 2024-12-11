@@ -1,0 +1,48 @@
+// Breakpoints
+$breakpoints: (
+  'sm': 576px,
+  'md': 768px,
+  'lg': 992px,
+  'xl': 1200px
+);
+
+// Mixins
+@mixin responsive($breakpoint) {
+  @if map-has-key($breakpoints, $breakpoint) {
+    @media (min-width: map-get($breakpoints, $breakpoint)) {
+      @content;
+    }
+  }
+}
+
+// Mobile First Classes
+.hide-on-mobile {
+  @media (max-width: map-get($breakpoints, 'md')) {
+    display: none !important;
+  }
+}
+
+.show-on-mobile {
+  @media (min-width: map-get($breakpoints, 'md')) {
+    display: none !important;
+  }
+}
+
+// Touch-friendly Classes
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+// Scrolling
+.scroll-container {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+// Grid System
+.responsive-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
