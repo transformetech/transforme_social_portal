@@ -1,6 +1,6 @@
 import { ref, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
-
+import { $api } from '@/api/api';
 export function useAuth() {
   const router = useRouter();
   const isAuthenticated = ref(!!localStorage.getItem('token'));
@@ -97,17 +97,14 @@ export function useAuth() {
     try {
       isLoading.value = true;
 
-      // Simula uma chamada API com delay de 1 segundo
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const $response = await $api.post('/login', {
+        document: form.value.username,
+        password: form.value.password
+      });
 
-      // Credenciais fake para teste (CPF válido para teste: 529.982.247-25)
-      const fakeCPF = '52998224725';
-      const fakePassword = '123456';
-
-      if (form.value.username.replace(/\D/g, '') === fakeCPF && form.value.password === fakePassword) {
-        const fakeToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.fake';
-        localStorage.setItem('token', fakeToken);
-        token.value = fakeToken;
+      if ($response.data.token) {
+        localStorage.setItem('token', $response.data.token);
+        token.value = $response.data.token;
         isAuthenticated.value = true;
 
         // Forçar redirecionamento para home
@@ -125,11 +122,16 @@ export function useAuth() {
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    token.value = null;
-    isAuthenticated.value = false;
-    router.push('/login');
+  const logout = async () => {
+    try {
+      await $api.post('/logout');
+      localStorage.removeItem('token');
+      token.value = null;
+      isAuthenticated.value = false;
+      router.push('/login');
+    } catch (error) {
+      console.error('Erro ao fazer logout:', error);
+    }
   };
 
   return {

@@ -59,6 +59,17 @@ const routes: Array<RouteRecordRaw> = [
     name: 'impact',
     component: () => import('@/views/Impact.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/retrospective',
+    name: 'Retrospective',
+    component: () => import('@/views/Retrospective.vue')
+  },
+  {
+    path: '/profile',
+    name: 'profile',
+    component: () => import('@/views/Profile.vue'),
+    meta: { requiresAuth: true }
   }
 ];
 

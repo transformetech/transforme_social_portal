@@ -5,7 +5,7 @@
         <ion-buttons slot="start">
           <ion-menu-button></ion-menu-button>
         </ion-buttons>
-        <ion-title>Portal do Doador</ion-title>
+        <ion-title>Portal do Doador - transforme.tech</ion-title>
         <ion-buttons slot="end">
           <ion-button @click="logout">
             <ion-icon :icon="logOutOutline" slot="icon-only"></ion-icon>
@@ -18,13 +18,13 @@
       <!-- Header com informações do usuário -->
       <div class="user-header">
         <div class="user-info">
-          <ion-avatar>
+          <ion-avatar @click="navigateTo('profile')">
             <img alt="Avatar" src="https://ionicframework.com/docs/img/demos/avatar.svg" />
           </ion-avatar>
           <div class="user-details">
             <div class="user-header-row">
               <h2>Olá, {{ userName }}</h2>
-              <SocialShare
+              <!-- <SocialShare
                 :donor-name="userName"
                 :project-name="lastDonationProject"
                 :beneficiaries-count="beneficiariesCount"
@@ -32,12 +32,16 @@
                 :organization-name="organizationName"
                 :organization-logo="organizationLogo"
                 :preview-image="projectPreviewImage"
-              />
+              /> -->
             </div>
             <p>Doador desde {{ donorSince }}</p>
           </div>
         </div>
         <div class="donation-summary">
+          <div class="summary-card">
+            <span class="amount">{{ beneficiariesCount }}</span>
+            <span class="label">Pessoas Beneficiadas</span>
+          </div>
           <div class="summary-card">
             <span class="amount">{{ totalDonations }}</span>
             <span class="label">Total Doado</span>
@@ -88,8 +92,76 @@
               </ion-card-content>
             </ion-card>
           </ion-col>
+          <ion-col size="12" size-md="4">
+            <ion-card @click="navigateTo('retrospective')">
+              <ion-card-content>
+                <ion-icon :icon="analyticsOutline" class="card-icon"></ion-icon>
+                <h3>Minha Retrospectiva</h3>
+                <p>Veja seu impacto em 2024</p>
+              </ion-card-content>
+            </ion-card>
+          </ion-col>
         </ion-row>
       </ion-grid>
+
+      <!-- Adicione após a seção quick-actions e antes da alerts-section -->
+      <div class="featured-projects">
+        <div class="section-header">
+          <h2>
+            <ion-icon :icon="starOutline" color="warning"></ion-icon>
+            Projetos em Destaque
+          </h2>
+          <ion-button fill="clear" @click="navigateTo('impact')">
+            Ver todos
+            <ion-icon :icon="arrowForward" slot="end"></ion-icon>
+          </ion-button>
+        </div>
+
+        <swiper
+          :modules="[SwiperPagination, SwiperNavigation]"
+          :slides-per-view="1.2"
+          :space-between="20"
+          :pagination="{ clickable: true }"
+          :navigation="true"
+          :breakpoints="{
+            640: {
+              slidesPerView: 2.2,
+            },
+            1024: {
+              slidesPerView: 3.2,
+            }
+          }"
+          class="projects-swiper"
+        >
+          <swiper-slide v-for="project in featuredProjects" :key="project.id">
+            <ion-card class="project-card">
+              <img :src="project.image" :alt="project.title" loading="lazy" />
+              <ion-card-content>
+                <div class="project-status">
+                  <ion-badge :color="project.status.color">{{ project.status.label }}</ion-badge>
+                  <span class="project-progress">{{ project.progress }}%</span>
+                </div>
+                <h3>{{ project.title }}</h3>
+                <p>{{ project.description }}</p>
+                <div class="project-meta">
+                  <div class="meta-item">
+                    <ion-icon :icon="peopleOutline"></ion-icon>
+                    <span>{{ project.beneficiaries }} beneficiados</span>
+                  </div>
+                  <div class="meta-item">
+                    <ion-icon :icon="walletOutline"></ion-icon>
+                    <span>{{ project.goal }}</span>
+                  </div>
+                </div>
+                <ion-progress-bar
+                  :value="project.progress / 100"
+                  :color="project.status.color"
+                ></ion-progress-bar>
+              </ion-card-content>
+            </ion-card>
+          </swiper-slide>
+        </swiper>
+      </div>
 
       <!-- Seção de Avisos Importantes -->
       <div class="alerts-section">
@@ -288,8 +360,6 @@
         </ion-grid>
       </div>
 
-      <!-- Adicione após a seção de notícias -->
-      <ProjectCarousel />
     </ion-content>
 
     <!-- Adicione o componente MediaViewer -->
@@ -301,7 +371,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuth } from '@/composables/useAuth';
 import {
@@ -319,19 +389,33 @@ import {
   playCircleOutline, imageOutline,
   timeOutline,
   locationOutline,
-  arrowForward
+  arrowForward,
+  starOutline,
+  analyticsOutline,
 } from 'ionicons/icons';
 import SocialShare from '@/components/SocialShare.vue';
-import ProjectCarousel from '@/components/ProjectCarousel.vue';
+import { Swiper, SwiperSlide } from 'swiper/vue';
+import { Navigation, Pagination } from 'swiper/modules';
+import 'swiper/css';
+import 'swiper/css/navigation';
+import 'swiper/css/pagination';
+import { homeService } from '@/services/homeService';
 
 const router = useRouter();
 const { logout } = useAuth();
 
 // Dados mockados do usuário
-const userName = ref('João Silva');
-const donorSince = ref('Janeiro 2023');
-const totalDonations = ref('R$ 5.000,00');
-const donationsCount = ref('12');
+const userName = ref('');
+const donorSince = ref('');
+const totalDonations = ref('');
+const donationsCount = ref('');
+
+const loadDonorData = async () => {
+  const data = await homeService.getDonorData();
+
+  userName.value = data.pessoa.nome;
+  donorSince.value = data.data_de_cadastro;
+};
 
 // Configurações do slider
 const slideOpts = {
@@ -511,6 +595,79 @@ const lastDonationAmount = ref('R$ 100,00');
 const organizationName = ref('ONG Exemplo');
 const organizationLogo = ref('https://exemplo.com/logo.png');
 const projectPreviewImage = ref('https://exemplo.com/projeto.jpg');
+
+// Adicione os dados mockados dos projetos
+const featuredProjects = ref([
+  {
+    id: 1,
+    title: 'Educação para Todos',
+    description: 'Projeto de apoio educacional para crianças em situação de vulnerabilidade',
+    image: 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6',
+    status: { label: 'Em andamento', color: 'success' },
+    progress: 75,
+    beneficiaries: 150,
+    goal: 'R$ 50.000,00'
+  },
+  {
+    id: 2,
+    title: 'Esporte é Vida',
+    description: 'Incentivo ao esporte para jovens da comunidade',
+    image: 'https://images.unsplash.com/photo-1526676037777-05a232554f77',
+    status: { label: 'Novo', color: 'primary' },
+    progress: 30,
+    beneficiaries: 80,
+    goal: 'R$ 30.000,00'
+  },
+  {
+    id: 3,
+    title: 'Saúde para Todos',
+    description: 'Atendimento médico gratuito para famílias carentes',
+    image: 'https://images.unsplash.com/photo-1584515933487-779824d29309',
+    status: { label: 'Em andamento', color: 'success' },
+    progress: 60,
+    beneficiaries: 200,
+    goal: 'R$ 75.000,00'
+  },
+  {
+    id: 4,
+    title: 'Arte e Cultura',
+    description: 'Oficinas de arte e cultura para jovens',
+    image: 'https://images.unsplash.com/photo-1596728325488-58c87691e9af',
+    status: { label: 'Novo', color: 'primary' },
+    progress: 25,
+    beneficiaries: 120,
+    goal: 'R$ 35.000,00'
+  },
+  {
+    id: 5,
+    title: 'Alimentação Solidária',
+    description: 'Distribuição de alimentos para famílias carentes',
+    image: 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c',
+    status: { label: 'Em andamento', color: 'success' },
+    progress: 85,
+    beneficiaries: 300,
+    goal: 'R$ 60.000,00'
+  },
+  {
+    id: 6,
+    title: 'Capacitação Profissional',
+    description: 'Cursos profissionalizantes para jovens',
+    image: 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655',
+    status: { label: 'Em andamento', color: 'success' },
+    progress: 45,
+    beneficiaries: 90,
+    goal: 'R$ 40.000,00'
+  },
+  // ... mais projetos ...
+]);
+
+// Adicione os módulos do Swiper
+const SwiperNavigation = Navigation;
+const SwiperPagination = Pagination;
+
+onMounted(() => {
+  loadDonorData();
+});
 </script>
 
 <style scoped>
@@ -559,7 +716,7 @@ const projectPreviewImage = ref('https://exemplo.com/projeto.jpg');
 
 .donation-summary {
   display: flex;
-  gap: 1.5rem;
+  gap: 1rem;
   margin-top: 1.5rem;
 }
 
@@ -1021,5 +1178,111 @@ ion-button:hover::part(native) {
   display: flex;
   align-items: center;
   gap: 1rem;
+}
+
+/* Estilos para a seção de Projetos em Destaque */
+.featured-projects {
+  padding: 2rem;
+  background: var(--ion-color-light);
+  margin: 1.5rem;
+  border-radius: var(--card-border-radius);
+}
+
+.project-card {
+  margin: 0;
+  border-radius: var(--card-border-radius);
+  overflow: hidden;
+  transition: transform var(--transition-speed);
+}
+
+.project-card:hover {
+  transform: translateY(-5px);
+}
+
+.project-card img {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+}
+
+.project-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.project-progress {
+  font-weight: 600;
+  color: var(--ion-color-medium);
+}
+
+.project-card h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0.5rem 0;
+  color: var(--ion-color-dark);
+}
+
+.project-meta {
+  display: flex;
+  justify-content: space-between;
+  margin: 1rem 0;
+  color: var(--ion-color-medium);
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.meta-item ion-icon {
+  font-size: 1.2rem;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .featured-projects {
+    padding: 1rem;
+    margin: 1rem;
+  }
+}
+
+/* Adicione estes estilos se usar a opção do Slider */
+.swiper {
+  padding: 1rem;
+}
+
+.swiper-slide {
+  height: auto;
+}
+
+/* Estilos atualizados para o Swiper */
+.projects-swiper {
+  padding: 1rem 0.5rem 3rem 0.5rem; /* Aumentado padding inferior para acomodar a paginação */
+}
+
+:deep(.swiper-pagination) {
+  bottom: 0;
+}
+
+:deep(.swiper-button-next),
+:deep(.swiper-button-prev) {
+  color: var(--ion-color-primary);
+  scale: 0.7;
+}
+
+:deep(.swiper-pagination-bullet-active) {
+  background: var(--ion-color-primary);
+}
+
+/* Ajuste para mobile */
+@media (max-width: 768px) {
+  :deep(.swiper-button-next),
+  :deep(.swiper-button-prev) {
+    display: none;
+  }
 }
 </style>

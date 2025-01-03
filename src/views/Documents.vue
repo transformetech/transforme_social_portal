@@ -6,102 +6,161 @@
           <ion-menu-button></ion-menu-button>
         </ion-buttons>
         <ion-title>Documentos</ion-title>
+        <ion-buttons slot="end">
+          <ion-button @click="openUploadModal">
+            <ion-icon :icon="addOutline" slot="icon-only"></ion-icon>
+          </ion-button>
+        </ion-buttons>
       </ion-toolbar>
     </ion-header>
 
     <ion-content>
-      <!-- Barra de Pesquisa e Filtros -->
-      <div class="search-filters">
-        <ion-searchbar
-          v-model="searchQuery"
-          placeholder="Buscar documentos..."
-          @ionInput="filterDocuments"
-        ></ion-searchbar>
-        <div class="filter-buttons">
-          <ion-chip
-            v-for="category in categories"
-            :key="category.id"
-            :color="selectedCategory === category.id ? 'primary' : 'medium'"
-            @click="selectCategory(category.id)"
-            :outline="selectedCategory !== category.id"
-          >
-            <ion-icon :icon="category.icon"></ion-icon>
-            <ion-label>{{ category.name }}</ion-label>
-          </ion-chip>
+      <div class="documents-container">
+        <!-- Seção de Upload Rápido -->
+        <div class="upload-section">
+          <div class="upload-area" @click="openUploadModal" @dragover.prevent @drop="handleDrop">
+            <ion-icon :icon="cloudUploadOutline"></ion-icon>
+            <h3>Arraste arquivos aqui</h3>
+            <p>ou clique para fazer upload</p>
+          </div>
+        </div>
+
+        <!-- Filtros e Busca -->
+        <div class="filters-section">
+          <ion-searchbar
+            v-model="searchQuery"
+            placeholder="Buscar documentos"
+            :debounce="500"
+          ></ion-searchbar>
+          <ion-segment v-model="selectedCategory" class="category-filter">
+            <ion-segment-button value="all">Todos</ion-segment-button>
+            <ion-segment-button value="receipts">Recibos</ion-segment-button>
+            <ion-segment-button value="contracts">Contratos</ion-segment-button>
+            <ion-segment-button value="reports">Relatórios</ion-segment-button>
+          </ion-segment>
+        </div>
+
+        <!-- Lista de Documentos -->
+        <div class="documents-grid">
+          <ion-card v-for="doc in filteredDocuments" :key="doc.id" class="document-card">
+            <div class="document-icon" :class="doc.type">
+              <ion-icon :icon="getDocumentIcon(doc.type)"></ion-icon>
+            </div>
+            <ion-card-content>
+              <div class="document-info">
+                <h3>{{ doc.name }}</h3>
+                <p>{{ doc.date }}</p>
+                <span class="document-size">{{ formatFileSize(doc.size) }}</span>
+              </div>
+              <div class="document-actions">
+                <ion-button fill="clear" @click="downloadDocument(doc)">
+                  <ion-icon :icon="downloadOutline" slot="icon-only"></ion-icon>
+                </ion-button>
+                <ion-button fill="clear" @click="shareDocument(doc)">
+                  <ion-icon :icon="shareOutline" slot="icon-only"></ion-icon>
+                </ion-button>
+                <ion-button fill="clear" color="danger" @click="confirmDelete(doc)">
+                  <ion-icon :icon="trashOutline" slot="icon-only"></ion-icon>
+                </ion-button>
+              </div>
+            </ion-card-content>
+          </ion-card>
         </div>
       </div>
-
-      <!-- Grid de Documentos -->
-      <div class="documents-grid">
-        <ion-grid>
-          <ion-row>
-            <ion-col size="12" size-md="6" size-lg="4" v-for="doc in filteredDocuments" :key="doc.id">
-              <div class="document-card" :class="{ 'new': doc.isNew }">
-                <div class="document-icon" :class="doc.type">
-                  <ion-icon :icon="getDocumentIcon(doc.type)"></ion-icon>
-                </div>
-                <div class="document-info">
-                  <h3>{{ doc.title }}</h3>
-                  <p>{{ doc.description }}</p>
-                  <div class="document-meta">
-                    <span class="document-date">
-                      <ion-icon :icon="calendarOutline"></ion-icon>
-                      {{ doc.date }}
-                    </span>
-                    <span class="document-size">
-                      <ion-icon :icon="documentOutline"></ion-icon>
-                      {{ doc.size }}
-                    </span>
-                  </div>
-                  <div class="document-actions">
-                    <ion-button fill="clear" @click="previewDocument(doc)">
-                      <ion-icon slot="start" :icon="eyeOutline"></ion-icon>
-                      Visualizar
-                    </ion-button>
-                    <ion-button fill="clear" @click="downloadDocument(doc)">
-                      <ion-icon slot="start" :icon="downloadOutline"></ion-icon>
-                      Baixar
-                    </ion-button>
-                  </div>
-                </div>
-                <div v-if="doc.isNew" class="new-badge">Novo</div>
-              </div>
-            </ion-col>
-          </ion-row>
-        </ion-grid>
-      </div>
-
-      <!-- Modal de Visualização -->
-      <ion-modal :is-open="showPreview" @didDismiss="closePreview">
-        <ion-header>
-          <ion-toolbar>
-            <ion-title>{{ selectedDocument?.title }}</ion-title>
-            <ion-buttons slot="end">
-              <ion-button @click="closePreview">
-                <ion-icon :icon="closeOutline" slot="icon-only"></ion-icon>
-              </ion-button>
-            </ion-buttons>
-          </ion-toolbar>
-        </ion-header>
-        <ion-content class="ion-padding">
-          <div class="preview-container" v-if="selectedDocument">
-            <iframe
-              v-if="selectedDocument.previewUrl"
-              :src="selectedDocument.previewUrl"
-              frameborder="0"
-              class="document-preview"
-            ></iframe>
-            <div v-else class="preview-fallback">
-              <ion-icon :icon="documentTextOutline"></ion-icon>
-              <p>Visualização não disponível</p>
-              <ion-button @click="downloadDocument(selectedDocument)">
-                Baixar Documento
-              </ion-button>
-            </div>
-          </div>
-        </ion-content>
-      </ion-modal>
     </ion-content>
+
+    <!-- Modal de Upload -->
+    <ion-modal :is-open="isUploadModalOpen" @didDismiss="isUploadModalOpen = false">
+      <ion-header>
+        <ion-toolbar>
+          <ion-title>Novo Documento</ion-title>
+          <ion-buttons slot="end">
+            <ion-button @click="isUploadModalOpen = false">
+              <ion-icon :icon="closeOutline" slot="icon-only"></ion-icon>
+            </ion-button>
+          </ion-buttons>
+        </ion-toolbar>
+      </ion-header>
+      <ion-content>
+        <div class="upload-form">
+          <ion-list>
+            <ion-item>
+              <ion-label position="stacked">Tipo de Documento</ion-label>
+              <ion-select v-model="newDocument.type" placeholder="Selecione o tipo">
+                <ion-select-option value="receipt">Recibo</ion-select-option>
+                <ion-select-option value="contract">Contrato</ion-select-option>
+                <ion-select-option value="report">Relatório</ion-select-option>
+              </ion-select>
+            </ion-item>
+
+            <ion-item>
+              <ion-label position="stacked">Nome do Documento</ion-label>
+              <ion-input v-model="newDocument.name" placeholder="Digite um nome"></ion-input>
+            </ion-item>
+
+            <ion-item>
+              <ion-label position="stacked">Descrição</ion-label>
+              <ion-textarea
+                v-model="newDocument.description"
+                placeholder="Digite uma descrição"
+                :rows="3"
+              ></ion-textarea>
+            </ion-item>
+
+            <div class="file-upload-area">
+              <input
+                type="file"
+                ref="fileInput"
+                @change="handleFileSelect"
+                style="display: none"
+                accept=".pdf,.doc,.docx,.xls,.xlsx"
+              />
+              <ion-button expand="block" @click="selectFile" class="upload-button">
+                <ion-icon :icon="documentOutline" slot="start"></ion-icon>
+                Selecionar Arquivo
+              </ion-button>
+              <p v-if="selectedFile" class="selected-file">
+                {{ selectedFile.name }} ({{ formatFileSize(selectedFile.size) }})
+              </p>
+            </div>
+          </ion-list>
+
+          <ion-button expand="block" @click="uploadDocument" :disabled="!canUpload">
+            <ion-icon :icon="cloudUploadOutline" slot="start"></ion-icon>
+            Fazer Upload
+          </ion-button>
+        </div>
+      </ion-content>
+    </ion-modal>
+
+    <!-- Toast de Feedback -->
+    <ion-toast
+      :is-open="showToast"
+      :message="toastMessage"
+      :duration="2000"
+      :color="toastColor"
+      position="top"
+      @didDismiss="showToast = false"
+    ></ion-toast>
+
+    <!-- Alert de Confirmação -->
+    <ion-alert
+      :is-open="showDeleteAlert"
+      header="Confirmar Exclusão"
+      message="Tem certeza que deseja excluir este documento?"
+      :buttons="[
+        {
+          text: 'Cancelar',
+          role: 'cancel',
+        },
+        {
+          text: 'Excluir',
+          role: 'confirm',
+          handler: () => deleteDocument(documentToDelete),
+        },
+      ]"
+      @didDismiss="showDeleteAlert = false"
+    ></ion-alert>
   </ion-page>
 </template>
 
@@ -110,258 +169,332 @@ import { ref, computed } from 'vue';
 import {
   IonPage, IonHeader, IonToolbar, IonTitle, IonContent,
   IonButtons, IonMenuButton, IonButton, IonIcon,
-  IonGrid, IonRow, IonCol, IonSearchbar, IonChip,
-  IonLabel, IonModal
+  IonCard, IonCardContent, IonSearchbar, IonSegment,
+  IonSegmentButton, IonModal, IonList, IonItem, IonLabel,
+  IonInput, IonTextarea, IonSelect, IonSelectOption,
+  IonToast, IonAlert
 } from '@ionic/vue';
 import {
-  documentOutline, downloadOutline, eyeOutline,
-  calendarOutline, closeOutline, documentTextOutline,
-  receiptOutline, newspaperOutline, createOutline
+  addOutline, cloudUploadOutline, documentOutline,
+  downloadOutline, shareOutline, trashOutline,
+  closeOutline, documentTextOutline, newspaperOutline,
+  receiptOutline
 } from 'ionicons/icons';
 
-// Categorias de documentos
-const categories = [
-  { id: 'all', name: 'Todos', icon: documentOutline },
-  { id: 'receipts', name: 'Recibos', icon: receiptOutline },
-  { id: 'reports', name: 'Relatórios', icon: newspaperOutline },
-  { id: 'certificates', name: 'Certificados', icon: createOutline }
-];
-
-// Estado do componente
+// Estados
 const searchQuery = ref('');
 const selectedCategory = ref('all');
-const showPreview = ref(false);
-const selectedDocument = ref<any>(null);
+const isUploadModalOpen = ref(false);
+const showToast = ref(false);
+const toastMessage = ref('');
+const toastColor = ref('success');
+const showDeleteAlert = ref(false);
+const documentToDelete = ref(null);
+const fileInput = ref(null);
+const selectedFile = ref(null);
 
-// Dados mockados de documentos
+// Novo documento
+const newDocument = ref({
+  type: '',
+  name: '',
+  description: '',
+});
+
+// Documentos mockados
 const documents = ref([
   {
     id: 1,
-    title: 'Recibo de Doação - Janeiro 2024',
-    description: 'Comprovante de doação mensal',
+    name: 'Recibo de Doação - Janeiro 2024',
     type: 'receipt',
-    date: '31/01/2024',
-    size: '156 KB',
-    category: 'receipts',
-    isNew: true,
-    previewUrl: 'https://docs.google.com/document/d/e/2PACX-sample/pub?embedded=true'
+    date: '15/01/2024',
+    size: 1024576, // 1MB
+    url: '#'
   },
   {
     id: 2,
-    title: 'Relatório de Impacto 2023',
-    description: 'Relatório anual de impacto social',
-    type: 'report',
-    date: '15/01/2024',
-    size: '2.4 MB',
-    category: 'reports',
-    isNew: false,
-    previewUrl: 'https://docs.google.com/document/d/e/2PACX-sample/pub?embedded=true'
+    name: 'Contrato de Doação Regular',
+    type: 'contract',
+    date: '01/01/2024',
+    size: 2048576, // 2MB
+    url: '#'
   },
   {
     id: 3,
-    title: 'Certificado de Doador 2023',
-    description: 'Certificado de reconhecimento',
-    type: 'certificate',
+    name: 'Relatório de Impacto 2023',
+    type: 'report',
     date: '31/12/2023',
-    size: '789 KB',
-    category: 'certificates',
-    isNew: false,
-    previewUrl: null
-  }
+    size: 5242880, // 5MB
+    url: '#'
+  },
 ]);
 
-// Computed properties
+// Computed Properties
 const filteredDocuments = computed(() => {
-  return documents.value.filter(doc => {
-    const matchesSearch = doc.title.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-                         doc.description.toLowerCase().includes(searchQuery.value.toLowerCase());
-    const matchesCategory = selectedCategory.value === 'all' || doc.category === selectedCategory.value;
-    return matchesSearch && matchesCategory;
-  });
+  let filtered = [...documents.value];
+  
+  if (searchQuery.value) {
+    filtered = filtered.filter(doc => 
+      doc.name.toLowerCase().includes(searchQuery.value.toLowerCase())
+    );
+  }
+  
+  if (selectedCategory.value !== 'all') {
+    filtered = filtered.filter(doc => 
+      doc.type === selectedCategory.value.slice(0, -1)
+    );
+  }
+  
+  return filtered;
 });
 
-// Funções auxiliares
-const getDocumentIcon = (type: string) => {
-  const icons = {
-    receipt: receiptOutline,
-    report: newspaperOutline,
-    certificate: createOutline
-  };
-  return icons[type] || documentOutline;
+const canUpload = computed(() => {
+  return newDocument.value.type && 
+         newDocument.value.name && 
+         selectedFile.value;
+});
+
+// Métodos
+const getDocumentIcon = (type) => {
+  switch (type) {
+    case 'receipt': return receiptOutline;
+    case 'contract': return documentTextOutline;
+    case 'report': return newspaperOutline;
+    default: return documentOutline;
+  }
 };
 
-const selectCategory = (categoryId: string) => {
-  selectedCategory.value = categoryId;
+const formatFileSize = (bytes) => {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
-const filterDocuments = (event: any) => {
-  searchQuery.value = event.target.value;
+const openUploadModal = () => {
+  isUploadModalOpen.value = true;
 };
 
-const previewDocument = (doc: any) => {
-  selectedDocument.value = doc;
-  showPreview.value = true;
+const selectFile = () => {
+  fileInput.value.click();
 };
 
-const closePreview = () => {
-  showPreview.value = false;
-  selectedDocument.value = null;
+const handleFileSelect = (event) => {
+  const file = event.target.files[0];
+  if (file) {
+    selectedFile.value = file;
+    if (!newDocument.value.name) {
+      newDocument.value.name = file.name.split('.')[0];
+    }
+  }
 };
 
-const downloadDocument = (doc: any) => {
+const handleDrop = (event) => {
+  event.preventDefault();
+  const file = event.dataTransfer.files[0];
+  if (file) {
+    selectedFile.value = file;
+    openUploadModal();
+    if (!newDocument.value.name) {
+      newDocument.value.name = file.name.split('.')[0];
+    }
+  }
+};
+
+const uploadDocument = async () => {
+  try {
+    // Aqui você implementaria a lógica real de upload
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Adiciona o documento à lista (simulação)
+    documents.value.unshift({
+      id: documents.value.length + 1,
+      name: newDocument.value.name,
+      type: newDocument.value.type,
+      date: new Date().toLocaleDateString('pt-BR'),
+      size: selectedFile.value.size,
+      url: '#'
+    });
+
+    isUploadModalOpen.value = false;
+    toastMessage.value = 'Documento enviado com sucesso!';
+    toastColor.value = 'success';
+    showToast.value = true;
+
+    // Reset form
+    newDocument.value = { type: '', name: '', description: '' };
+    selectedFile.value = null;
+  } catch (error) {
+    toastMessage.value = 'Erro ao enviar documento. Tente novamente.';
+    toastColor.value = 'danger';
+    showToast.value = true;
+  }
+};
+
+const downloadDocument = (doc) => {
   // Implementar lógica de download
-  console.log('Baixando documento:', doc.title);
+  toastMessage.value = 'Download iniciado';
+  toastColor.value = 'success';
+  showToast.value = true;
+};
+
+const shareDocument = (doc) => {
+  // Implementar lógica de compartilhamento
+  toastMessage.value = 'Link de compartilhamento copiado';
+  toastColor.value = 'success';
+  showToast.value = true;
+};
+
+const confirmDelete = (doc) => {
+  documentToDelete.value = doc;
+  showDeleteAlert.value = true;
+};
+
+const deleteDocument = (doc) => {
+  if (!doc) return;
+  
+  const index = documents.value.findIndex(d => d.id === doc.id);
+  if (index > -1) {
+    documents.value.splice(index, 1);
+    toastMessage.value = 'Documento excluído com sucesso';
+    toastColor.value = 'success';
+    showToast.value = true;
+  }
 };
 </script>
 
 <style scoped>
-.search-filters {
+.documents-container {
   padding: 1rem;
-  background: var(--ion-color-light);
-  position: sticky;
-  top: 0;
-  z-index: 100;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
-.filter-buttons {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 1rem;
-  overflow-x: auto;
-  padding-bottom: 0.5rem;
+.upload-section {
+  margin-bottom: 2rem;
 }
 
-.documents-grid {
-  padding: 1rem;
-}
-
-.document-card {
-  background: white;
+.upload-area {
+  border: 2px dashed var(--ion-color-medium);
   border-radius: 16px;
-  padding: 1.5rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  display: flex;
-  gap: 1rem;
-  position: relative;
+  padding: 2rem;
+  text-align: center;
+  cursor: pointer;
   transition: all 0.3s ease;
 }
 
+.upload-area:hover {
+  border-color: var(--ion-color-primary);
+  background: rgba(var(--ion-color-primary-rgb), 0.05);
+}
+
+.upload-area ion-icon {
+  font-size: 3rem;
+  color: var(--ion-color-medium);
+}
+
+.upload-area h3 {
+  margin: 1rem 0 0.5rem;
+  color: var(--ion-color-dark);
+}
+
+.upload-area p {
+  margin: 0;
+  color: var(--ion-color-medium);
+}
+
+.filters-section {
+  margin-bottom: 2rem;
+}
+
+.category-filter {
+  margin-top: 1rem;
+}
+
+.documents-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+.document-card {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  transition: transform 0.3s ease;
+}
+
 .document-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  transform: translateY(-5px);
 }
 
 .document-icon {
-  width: 60px;
-  height: 60px;
-  border-radius: 12px;
+  padding: 1rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.8rem;
 }
 
-.document-icon.receipt {
-  background: rgba(var(--ion-color-primary-rgb), 0.1);
-  color: var(--ion-color-primary);
+.document-icon ion-icon {
+  font-size: 2rem;
 }
 
-.document-icon.report {
-  background: rgba(var(--ion-color-success-rgb), 0.1);
-  color: var(--ion-color-success);
-}
-
-.document-icon.certificate {
-  background: rgba(var(--ion-color-warning-rgb), 0.1);
-  color: var(--ion-color-warning);
-}
+.document-icon.receipt { color: var(--ion-color-success); }
+.document-icon.contract { color: var(--ion-color-primary); }
+.document-icon.report { color: var(--ion-color-warning); }
 
 .document-info {
   flex: 1;
 }
 
 .document-info h3 {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.1rem;
-  color: var(--ion-color-dark);
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
 }
 
 .document-info p {
-  margin: 0;
-  color: var(--ion-color-medium);
+  margin: 0.5rem 0;
   font-size: 0.9rem;
-}
-
-.document-meta {
-  display: flex;
-  gap: 1rem;
-  margin: 0.8rem 0;
-  font-size: 0.85rem;
   color: var(--ion-color-medium);
 }
 
-.document-meta span {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.document-size {
+  font-size: 0.8rem;
+  color: var(--ion-color-medium);
 }
 
 .document-actions {
   display: flex;
   gap: 0.5rem;
-  margin-top: 1rem;
 }
 
-.new-badge {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  background: var(--ion-color-success);
-  color: white;
-  padding: 4px 8px;
-  border-radius: 99px;
-  font-size: 0.8rem;
-  font-weight: 500;
+.upload-form {
+  padding: 1rem;
 }
 
-.preview-container {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.document-preview {
-  width: 100%;
-  height: 100%;
-  border: none;
-}
-
-.preview-fallback {
+.file-upload-area {
+  padding: 1rem;
   text-align: center;
-  padding: 2rem;
 }
 
-.preview-fallback ion-icon {
-  font-size: 4rem;
+.upload-button {
+  margin: 1rem 0;
+}
+
+.selected-file {
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
   color: var(--ion-color-medium);
-  margin-bottom: 1rem;
 }
 
 @media (max-width: 768px) {
-  .document-card {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
+  .documents-grid {
+    grid-template-columns: 1fr;
   }
-
-  .document-meta {
-    justify-content: center;
-  }
-
-  .document-actions {
-    justify-content: center;
+  
+  .upload-area {
+    padding: 1rem;
   }
 }
 </style>
